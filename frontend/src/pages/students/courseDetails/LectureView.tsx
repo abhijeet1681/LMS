@@ -14,6 +14,9 @@ import {
   markAsCompletedApi,
   markAsIncompletedApi,
   markVideoCompleteApi,
+  updateVideoProgressApi,
+  checkVideoAccessApi,
+  getQuizForCourseApi,
 } from "@/api/student";
 import {
   Collapsible,
@@ -23,10 +26,13 @@ import {
 import { getVideoUrl } from "@/utils/getVideoUrl";
 import { Progress } from "@/components/ui/progress";
 import LoadingScreen from "@/components/common/Loading/LoadingScreen";
+import { Quiz } from "@/components/Quiz/Quiz";
 
 interface ProgressVideo {
   videoId: string;
   isCompleted: boolean;
+  watchPercentage: number;
+  lastWatchedAt?: string;
 }
 
 interface ProgressLecture {
@@ -58,6 +64,11 @@ const LectureView: React.FC = () => {
   const [selectedVideo, setSelectedVideo] = useState<ISelectedVideo | null>(
     null
   );
+  const [showQuizButton, setShowQuizButton] = useState(false);
+  const [videoAccessRestricted, setVideoAccessRestricted] = useState<Record<string, boolean>>({});
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [playerRef, setPlayerRef] = useState<any>(null);
+  const [lastProgressUpdate, setLastProgressUpdate] = useState(0);
   const navigate = useNavigate();
 
   if (!id) {
@@ -102,6 +113,17 @@ const LectureView: React.FC = () => {
       try {
         const response = await getCourseProgressApi(id!);
         setProgress(response.data);
+        
+        // Check if quiz should be shown (100% course completion)
+        if (response.data.progressPercentage === 100) {
+          try {
+            const quizResponse = await getQuizForCourseApi(id!);
+            setShowQuizButton(true);
+          } catch (error) {
+            // Quiz doesn't exist or other error
+            setShowQuizButton(false);
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch progress", error);
       }
@@ -186,6 +208,107 @@ const LectureView: React.FC = () => {
     }
   };
 
+  // Handle video progress updates during playback
+  const handleVideoProgress = async (progressData: any) => {
+    if (!selectedVideo || !id) return;
+    
+    const watchPercentage = Math.floor((progressData.played || 0) * 100);
+    
+    // Only update progress every 10% to avoid excessive API calls
+    if (watchPercentage > lastProgressUpdate && watchPercentage % 10 === 0) {
+      setLastProgressUpdate(watchPercentage);
+      
+      try {
+        const response = await updateVideoProgressApi(
+          id,
+          selectedVideo.lectureId,
+          selectedVideo.video._id,
+          watchPercentage
+        );
+        
+        // Update local progress state
+        setProgress(response.data);
+        
+        if (watchPercentage >= 80) {
+          toast.success(`Video is ${watchPercentage}% complete!`);
+        }
+      } catch (error) {
+        console.error('Failed to update video progress:', error);
+      }
+    }
+  };
+
+  // Check if user can access a video based on 80% rule
+  const canAccessVideo = (videoId: string, lectureId: string): boolean => {
+    if (!progress || !course) return false;
+    
+    // Find the position of current video
+    let videoIndex = -1;
+    let lectureIndex = -1;
+    
+    for (let i = 0; i < course.lectures.length; i++) {
+      const lecture = course.lectures[i];
+      if (lecture._id === lectureId) {
+        lectureIndex = i;
+        for (let j = 0; j < lecture.videos.length; j++) {
+          if (lecture.videos[j]._id === videoId) {
+            videoIndex = j;
+            break;
+          }
+        }
+        break;
+      }
+    }
+    
+    // First video is always accessible
+    if (lectureIndex === 0 && videoIndex === 0) return true;
+    
+    // Find previous video
+    let prevLectureIndex = lectureIndex;
+    let prevVideoIndex = videoIndex - 1;
+    
+    if (prevVideoIndex < 0 && lectureIndex > 0) {
+      prevLectureIndex = lectureIndex - 1;
+      prevVideoIndex = course.lectures[prevLectureIndex].videos.length - 1;
+    }
+    
+    if (prevVideoIndex < 0) return true; // No previous video
+    
+    // Check if previous video has 80% completion
+    const prevLecture = progress.completedLectures.find(
+      l => l.lectureId === course.lectures[prevLectureIndex]._id
+    );
+    
+    if (!prevLecture) return false;
+    
+    const prevVideoProgress = prevLecture.completedVideos.find(
+      v => v.videoId === course.lectures[prevLectureIndex].videos[prevVideoIndex]._id
+    );
+    
+    return prevVideoProgress ? prevVideoProgress.watchPercentage >= 80 : false;
+  };
+
+  const handleVideoSelect = async (video: IVideo, lectureId: string, lectureTitle: string, lectureDescription: string) => {
+    // Check access if course is purchased
+    if (userCoursePurchaseStatus) {
+      const hasAccess = canAccessVideo(video._id, lectureId);
+      if (!hasAccess) {
+        toast.error('You must watch at least 80% of the previous video to unlock this one.');
+        return;
+      }
+    }
+    
+    // Reset progress tracking for new video
+    setLastProgressUpdate(0);
+    
+    setSelectedVideo({
+      video,
+      lectureId,
+      lectureTitle,
+      lectureDescription
+    });
+  };
+
   const [openLecture, setOpenLecture] = useState<string | null>(null);
 
   const toggleLecture = (lectureId: string) => {
@@ -199,9 +322,26 @@ const LectureView: React.FC = () => {
   return loading ? (
     <LoadingScreen />
   ) : (
-    <div className="flex flex-col sm:flex-row min-h-[90vh] max-w-7xl place-self-center w-full ">
-      <div className="flex w-full sm:w-2/3 lg:w-3/4 h-full order-2 sm:order-1 pb-10">
-        <div className="flex flex-col w-full">
+    <>
+      {/* Quiz Modal */}
+      {showQuiz && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="relative w-full max-w-4xl mx-4">
+            <Quiz
+              courseId={id!}
+              onClose={() => setShowQuiz(false)}
+              onCertificateGenerated={() => {
+                toast.success('Certificate generated! Check your certificates page.');
+                setShowQuiz(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      
+      <div className="flex flex-col sm:flex-row min-h-[90vh] max-w-7xl place-self-center w-full ">
+        <div className="flex w-full sm:w-2/3 lg:w-3/4 h-full order-2 sm:order-1 pb-10">
+          <div className="flex flex-col w-full">
           <div className="flex justify-between items-center bg-blue-500 dark:bg-blue-700 w-full text-white gap-2 p-2 h-16 max-h-16">
             <div className="flex items-center gap-2">
               <div
@@ -259,6 +399,7 @@ const LectureView: React.FC = () => {
                 controls
                 playing
                 url={videoUrl}
+                onProgress={handleVideoProgress}
                 onEnded={() => {
                   if (selectedVideo && id) {
                     handleMarkVideoComplete(
@@ -289,6 +430,24 @@ const LectureView: React.FC = () => {
                 <p className="italic">{selectedVideo?.lectureDescription}</p>
               </div>
             </div>
+            
+            {/* Quiz Button - Show when course is 100% complete */}
+            {showQuizButton && (
+              <div className="p-4 bg-green-50 dark:bg-green-900 rounded-lg mx-2">
+                <h3 className="font-bold text-green-800 dark:text-green-200 mb-2">
+                  🎉 Course Complete!
+                </h3>
+                <p className="text-green-700 dark:text-green-300 mb-3 text-sm">
+                  Take the final quiz to earn your certificate. You need 75% or higher to pass.
+                </p>
+                <Button 
+                  onClick={() => setShowQuiz(true)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Take Final Quiz
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -340,39 +499,73 @@ const LectureView: React.FC = () => {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       {lecture.videos.map((video) => {
-                        const isCompleted = progress?.completedLectures
+                        const videoProgress = progress?.completedLectures
                           .find((l) => l.lectureId === lecture._id)
-                          ?.completedVideos.some(
-                            (v) => v.videoId === video._id && v.isCompleted
+                          ?.completedVideos.find(
+                            (v) => v.videoId === video._id
                           );
+                        const isCompleted = videoProgress?.isCompleted || false;
+                        const watchPercentage = videoProgress?.watchPercentage || 0;
+                        const hasAccess = !userCoursePurchaseStatus || canAccessVideo(video._id, lecture._id);
+                        
                         return (
-                          <div
-                            key={video._id}
-                            className={`flex gap-2 items-center p-2 pl-6 cursor-pointer w-full ${
-                              selectedVideo?.video._id === video._id
-                                ? "bg-blue-600 border dark:bg-blue-700 dark:hover:bg-blue-600 shadow-md text-white hover:bg-blue-500"
-                                : "bg-white dark:bg-slate-600 hover:bg-slate-100 dark:hover:bg-slate-500"
-                            }`}
-                            onClick={() =>
-                              setSelectedVideo({
-                                video: video,
-                                lectureId: lecture._id,
-                                lectureTitle: lecture.title,
-                                lectureDescription: lecture.description,
-                              })
-                            }
-                          >
-                            {isCompleted ? (
-                              <CheckCircle2
-                                size={18}
-                                className="text-green-500"
-                              />
-                            ) : (
-                              <PlayCircle size={18} />
-                            )}
-                            <span className="text-xs">
-                              {video.title || "Video Title"}
-                            </span>
+                          <div key={video._id} className="w-full">
+                            <div
+                              className={`flex flex-col gap-1 p-2 pl-6 cursor-pointer w-full ${
+                                selectedVideo?.video._id === video._id
+                                  ? "bg-blue-600 border dark:bg-blue-700 dark:hover:bg-blue-600 shadow-md text-white hover:bg-blue-500"
+                                  : hasAccess 
+                                    ? "bg-white dark:bg-slate-600 hover:bg-slate-100 dark:hover:bg-slate-500"
+                                    : "bg-gray-200 dark:bg-gray-700 opacity-60 cursor-not-allowed"
+                              }`}
+                              onClick={() => {
+                                if (hasAccess) {
+                                  handleVideoSelect(
+                                    video,
+                                    lecture._id,
+                                    lecture.title,
+                                    lecture.description
+                                  );
+                                } else {
+                                  toast.error('You must watch at least 80% of the previous video to unlock this one.');
+                                }
+                              }}
+                            >
+                              <div className="flex gap-2 items-center">
+                                {!hasAccess ? (
+                                  <Lock size={18} className="text-gray-500" />
+                                ) : isCompleted ? (
+                                  <CheckCircle2
+                                    size={18}
+                                    className="text-green-500"
+                                  />
+                                ) : (
+                                  <PlayCircle size={18} />
+                                )}
+                                <span className="text-xs flex-1">
+                                  {video.title || "Video Title"}
+                                </span>
+                              </div>
+                              
+                              {/* Watch Progress Bar */}
+                              {userCoursePurchaseStatus && watchPercentage > 0 && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full transition-all duration-300 ${
+                                        watchPercentage >= 80 ? 'bg-green-500' : 'bg-yellow-500'
+                                      }`}
+                                      style={{ width: `${watchPercentage}%` }}
+                                    />
+                                  </div>
+                                  <span className={`text-xs ${
+                                    selectedVideo?.video._id === video._id ? 'text-white' : 'text-gray-600 dark:text-gray-400'
+                                  }`}>
+                                    {watchPercentage}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -384,6 +577,7 @@ const LectureView: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

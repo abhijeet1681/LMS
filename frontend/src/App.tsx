@@ -58,6 +58,10 @@ import Wishlist from "./pages/students/wishlist/Wishlist";
 import Footer from "./components/common/Footer/Footer";
 import AboutUs from "./pages/students/AboutUs";
 import ContactUs from "./pages/students/ContactUs";
+import Chatbot from "./components/Chatbot/Chatbot";
+import { useSelector } from "react-redux";
+import { RootState } from "./app/store";
+
 
 const GOOGLE_CLIENT_ID = config.google.CLIENT_ID;
 
@@ -69,11 +73,13 @@ function App() {
   const Layout = ({ children }: { children: React.ReactNode }) => {
     const location = useLocation();
     const isAdminRoute = location.pathname.startsWith("/admin");
+    const { isAuthenticated } = useSelector((state: RootState) => state.auth);
     const isInstructorRoute = location.pathname.startsWith("/instructor")
     return (
       <>
         {!isAdminRoute && <Navbar />}
         {children}
+        {isAuthenticated && !isAdminRoute && !isInstructorRoute && <Chatbot />}
         { !isAdminRoute &&  !isInstructorRoute && <Footer />}
       </>
     );

@@ -12,6 +12,7 @@ import session from 'express-session';
 import { config } from '../infrastructure/config/config';
 import instructorRouter from '../interfaces/routes/instructorRoutes';
 import webhookRouter from '../interfaces/routes/webhookRoute'
+import chatbotRouter from '../interfaces/routes/chatbotRoutes';
 
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -123,6 +124,7 @@ app.use('/api/student', studentRoutes)
 app.use('/api/admin', adminRouter)
 app.use('/api/instructor', instructorRouter)
 app.use('/api/chat', chatRouter)
+app.use('/api/chatbot', chatbotRouter)
 
 //unknown routes 
 app.all('*', (req: Request, res: Response, next : NextFunction) => {

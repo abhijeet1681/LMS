@@ -4,6 +4,7 @@ import { upload, uploadVideo } from "../../infrastructure/middlewares/multer";
 import { authorizeRole, isAuthenticated } from "../middlewares/authMiddleware";
 import { getPurchasesController } from "../controllers/instructor/purchases/purchasesController";
 import { getInstructorDashboardMetricsController, getInstructorEarningsController } from "../controllers/instructor/dashboard/dashboard";
+import { createQuizController, updateQuizController, getInstructorQuizzesController, getQuizController } from "../controllers/instructor/quiz/quizController";
 
 
 const instructorRouter = Router();
@@ -24,5 +25,12 @@ instructorRouter.use(isAuthenticated, authorizeRole(['instructor']),)
 instructorRouter.use(isAuthenticated, authorizeRole(['instructor']),)
     .get('/dashboard-metrics', getInstructorDashboardMetricsController)
     .get('/dashboard-earnings', getInstructorEarningsController)
+
+//quiz routes
+instructorRouter.use(isAuthenticated, authorizeRole(['instructor']),)
+    .post('/quiz/create', createQuizController)
+    .put('/quiz/:quizId', updateQuizController)
+    .get('/quizzes', getInstructorQuizzesController)
+    .get('/quiz/:quizId', getQuizController)
 
 export default instructorRouter

@@ -27,4 +27,12 @@ export class ProgressUseCase {
     async markCourseComplete(userId: string, courseId: string) {
         return await this.progressRepository.markCourseComplete(userId, courseId);
     }
+
+    async updateVideoProgress(userId: string, courseId: string, lectureId: string, videoId: string, watchPercentage: number) {
+        return await this.progressRepository.updateVideoWatchProgress(userId, courseId, lectureId, videoId, watchPercentage);
+    }
+
+    async checkVideoAccess(userId: string, courseId: string, lectureId: string, videoId: string, lectures: any[]) {
+        return await this.progressRepository.canAccessNextVideo(userId, courseId, lectureId, videoId, lectures);
+    }
 }

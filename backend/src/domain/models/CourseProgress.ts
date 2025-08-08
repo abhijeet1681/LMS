@@ -3,6 +3,8 @@ import mongoose, { Document, Schema, ObjectId } from "mongoose";
 export interface IProgressVideo {
   videoId: string | ObjectId;
   isCompleted: boolean;
+  watchPercentage: number; // percentage of video watched (0-100)
+  lastWatchedAt?: Date;
 }
 
 export interface iProgressLecture {
@@ -22,6 +24,8 @@ export interface IUserCourseProgress extends Document {
 const ProgressVideoSchema = new Schema<IProgressVideo>({
   videoId: { type: Schema.Types.ObjectId, ref: "Video", required: true },
   isCompleted: { type: Boolean, default: false },
+  watchPercentage: { type: Number, default: 0, min: 0, max: 100 },
+  lastWatchedAt: { type: Date }
 });
 
 const ProgressLectureSchema = new Schema<iProgressLecture>({

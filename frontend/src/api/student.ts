@@ -163,3 +163,77 @@ export const deleteRatingApi = async(ratingId:string) => {
   const response = await api.delete(`${API_URL}/api/student/rate/${ratingId}`)
   return response.data;
 }
+
+// Video Progress APIs
+export const updateVideoProgressApi = async (
+  courseId: string,
+  lectureId: string,
+  videoId: string,
+  watchPercentage: number
+) => {
+  const response = await api.put(
+    `${API_URL}/api/student/progress/${courseId}/lectures/${lectureId}/videos/${videoId}/progress`,
+    { watchPercentage }
+  );
+  return response.data;
+};
+
+export const checkVideoAccessApi = async (
+  courseId: string,
+  lectureId: string,
+  videoId: string
+) => {
+  const response = await api.get(
+    `${API_URL}/api/student/progress/${courseId}/lectures/${lectureId}/videos/${videoId}/access`
+  );
+  return response.data;
+};
+
+// Quiz APIs
+export const getQuizForCourseApi = async (courseId: string) => {
+  const response = await api.get(`${API_URL}/api/student/quiz/${courseId}`);
+  return response.data;
+};
+
+export const submitQuizApi = async (
+  courseId: string,
+  answers: { questionId: string; selectedAnswer: number }[],
+  timeSpent: number
+) => {
+  const response = await api.post(`${API_URL}/api/student/quiz/${courseId}/submit`, {
+    answers,
+    timeSpent
+  });
+  return response.data;
+};
+
+export const getUserQuizAttemptsApi = async (courseId: string) => {
+  const response = await api.get(`${API_URL}/api/student/quiz/${courseId}/attempts`);
+  return response.data;
+};
+
+export const checkQuizEligibilityApi = async (courseId: string) => {
+  const response = await api.get(`${API_URL}/api/student/quiz/${courseId}/eligibility`);
+  return response.data;
+};
+
+// Certificate APIs
+export const getUserCertificatesApi = async () => {
+  const response = await api.get(`${API_URL}/api/student/certificates`);
+  return response.data;
+};
+
+export const getCertificateApi = async (certificateId: string) => {
+  const response = await api.get(`${API_URL}/api/student/certificate/${certificateId}`);
+  return response.data;
+};
+
+export const downloadCertificateApi = async (certificateId: string) => {
+  const response = await api.get(`${API_URL}/api/student/certificate/${certificateId}/download`);
+  return response.data;
+};
+
+export const verifyCertificateApi = async (certificateId: string) => {
+  const response = await api.get(`${API_URL}/api/student/certificate/${certificateId}/verify`);
+  return response.data;
+};
